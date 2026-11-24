@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Espejos y lentes en 2D</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light;--card:#f3f3f3;--line:#c9c9c9;--tx:#111;--mut:#555}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:#fff;color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+.wrap{max-width:1150px;margin:0 auto;padding:18px 14px 40px}
+h1{margin:0;font-size:clamp(1.6rem,4.5vw,2.4rem);letter-spacing:-.5px}
+.sub{color:var(--mut);margin:2px 0 14px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.tab{flex:1 1 150px;border:2px solid #111;background:#fff;color:#111;padding:10px 12px;border-radius:12px;cursor:pointer;font:inherit;font-weight:700;text-align:left}
+.tab small{display:block;font-weight:400;color:var(--mut)}
+.tab.on{background:#111;color:#fff}.tab.on small{color:#ccc}
+.grid{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+#vp{position:relative;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:#dcdfe2;border:1px solid var(--line)}
+#sim{width:100%;height:100%;display:block;touch-action:none;cursor:ew-resize}
+.hint{position:absolute;right:8px;bottom:6px;color:#555;font-size:11px;pointer-events:none}
+h2{margin:0 0 4px;font-size:1.25rem}
+.law{border-left:5px solid #111;padding-left:10px;margin:6px 0 10px}
+.eq{font:700 1.05rem ui-monospace,Consolas,monospace;background:#fff;border:2px solid #111;border-radius:10px;padding:8px 12px;margin:8px 0;overflow-x:auto;white-space:nowrap}
+.ctl{display:flex;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
+.ctl label{min-width:150px;color:var(--mut);font-size:.92rem}
+input[type=range]{flex:1;min-width:120px;accent-color:#111}
+.val{font:700 .95rem ui-monospace,Consolas,monospace;min-width:70px;text-align:right}
+button.pp{border:0;background:#111;color:#fff;font-weight:700;padding:7px 16px;border-radius:999px;cursor:pointer;font:inherit}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.chip{padding:5px 12px;border:2px solid #bbb;border-radius:999px;color:#aaa;font-weight:600;font-size:.9rem;background:#fff}
+.chip.on{background:#111;border-color:#111;color:#fff}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:8px}
+.read div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:.8rem;color:var(--mut)}
+.read strong{display:block;font:700 1rem ui-monospace,Consolas,monospace;color:var(--tx)}
+.leg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.82rem;color:var(--mut);margin-top:8px}
+.leg i{display:inline-block;width:26px;height:0;border-top:4px solid;vertical-align:middle;margin-right:5px}
+.note{color:var(--mut);font-size:.85rem;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Espejos y lentes en 2D</h1>
+<p class="sub">Arrastra la flecha (el objeto) por el eje óptico, o usa los controles, y observa cómo cambia la imagen.</p>
+<div class="tabs" id="tabs"></div>
+<div class="grid">
+  <div class="card">
+    <div id="vp"><canvas id="sim"></canvas><div class="hint">arrastra la flecha oscura</div></div>
+    <div class="leg">
+      <span><i style="border-color:#000"></i>Rayo 1: paralelo al eje</span>
+      <span><i style="border-color:#5a5a5a"></i>Rayo 2: por el centro / vértice</span>
+      <span><i style="border-color:#8a8a8a"></i>Rayo 3: por el foco</span>
+      <span><i style="border-top-style:dashed;border-color:#111"></i>Prolongación (imagen virtual)</span>
+    </div>
+    <div class="ctl" style="margin-top:10px"><label for="dd">Distancia objeto d₀</label><input type="range" id="dd" min="1" max="30" step="0.1" value="20"><span class="val" id="ddv"></span></div>
+    <div class="ctl"><label for="ff">Distancia focal |f|</label><input type="range" id="ff" min="5" max="12" step="0.1" value="8"><span class="val" id="ffv"></span></div>
+    <div class="ctl"><button class="pp" id="pp">▶ Animar objeto</button></div>
+  </div>
+  <div class="card" id="info"></div>
+</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const T=[
+ {n:'Espejo cóncavo',s:'Converge la luz',mirror:true,sg:1,txt:'Su superficie reflectante curva hacia dentro, con el hueco mirando al objeto. Hace converger los rayos paralelos en el foco F, delante del espejo. La imagen depende de dónde pongas el objeto.'},
+ {n:'Espejo convexo',s:'Dispersa la luz',mirror:true,sg:-1,txt:'Su superficie reflectante curva hacia fuera, con la parte abombada hacia el objeto. Dispersa los rayos paralelos, que parecen salir de un foco virtual F detrás del espejo. Siempre da la misma clase de imagen.'},
+ {n:'Lente convergente',s:'Bordes más finos',mirror:false,sg:1,txt:'Es más gruesa en el centro. Los rayos paralelos se juntan en el foco F’ al otro lado de la lente. La imagen depende de dónde pongas el objeto.'},
+ {n:'Lente divergente',s:'Bordes más gruesos',mirror:false,sg:-1,txt:'Es más fina en el centro. Separa los rayos paralelos, que parecen salir de un foco virtual F del mismo lado que el objeto. Siempre da la misma clase de imagen.'}];
+let type=0,fm=8,d=20,ho=4,anim=false,ta=0,dragging=false;
+const cv=$('sim'),g=cv.getContext('2d');let W,H,s,cx,cy;
+const X=x=>cx+x*s,Y=y=>cy-y*s,Rr=9;
+function size(){const r=cv.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2);
+ if(cv.width!==Math.round(r.width*dp)){cv.width=Math.round(r.width*dp);cv.height=Math.round(r.height*dp)}
+ g.setTransform(dp,0,0,dp,0,0);W=r.width;H=r.height;s=W/72;cx=W/2;cy=H/2}
+function calc(){const t=T[type],f=t.sg*fm,near=Math.abs(d-f)<.05,di=near?null:d*f/(d-f),mag=near?null:-di/d,hi=near?null:mag*ho,xi=near?null:(t.mirror?-di:di);
+ return{t,f,near,di,mag,hi,xi,show:!near&&Math.abs(xi)<34&&Math.abs(hi)<21}}
+function ln(a,b,col,w,dash){g.beginPath();g.setLineDash(dash||[]);g.strokeStyle=col;g.lineWidth=w;g.moveTo(X(a[0]),Y(a[1]));g.lineTo(X(b[0]),Y(b[1]));g.stroke();g.setLineDash([])}
+function chev(a,b,col){const ax=X(a[0]),ay=Y(a[1]),bx=X(b[0]),by=Y(b[1]),L=Math.hypot(bx-ax,by-ay);if(L<46)return;
+ const th=Math.atan2(by-ay,bx-ax),mx=(ax+bx)/2,my=(ay+by)/2;g.save();g.translate(mx,my);g.rotate(th);g.fillStyle=col;g.beginPath();g.moveTo(6,0);g.lineTo(-5,-4.5);g.lineTo(-5,4.5);g.closePath();g.fill();g.restore()}
+function arrow(x,h,st){const px=X(x),y0=Y(0),y1=Y(h),dir=y1<y0?-1:1,a=Math.abs(y1-y0),hl=Math.min(a,Math.min(a*.45,s*2)),hw=s*.85,sw=s*.2,hb=y1-dir*hl;
+ g.beginPath();g.moveTo(px-sw,y0);g.lineTo(px-sw,hb);g.lineTo(px-hw,hb);g.lineTo(px,y1);g.lineTo(px+hw,hb);g.lineTo(px+sw,hb);g.lineTo(px+sw,y0);g.closePath();
+ if(st==='obj'){g.fillStyle='#1c1c1c';g.fill()}
+ else if(st==='real'){g.fillStyle='#7a7a7a';g.fill();g.strokeStyle='#222';g.lineWidth=1.5;g.stroke()}
+ else{g.fillStyle='rgba(255,255,255,.45)';g.fill();g.setLineDash([5,4]);g.strokeStyle='#222';g.lineWidth=1.8;g.stroke();g.setLineDash([])}}
+function tx(t,x,y,al,col,w,sz){g.font=(w||600)+' '+(sz||12)+'px system-ui,sans-serif';g.textAlign=al||'center';g.fillStyle=col||'#111';g.fillText(t,x,y)}
+function dot(x,t){g.beginPath();g.arc(X(x),Y(0),4,0,7);g.fillStyle='#111';g.fill();tx(t,X(x),Y(0)+19,'center','#111',700,13)}
+function element(t){
+ if(t.mirror){const Rc=2*fm,sf=y=>-t.sg*(Rc-Math.sqrt(Rc*Rc-y*y));
+  g.beginPath();for(let y=-Rr;y<=Rr;y+=.4)g.lineTo(X(sf(y)),Y(y));
+  for(let y=Rr;y>=-Rr;y-=.4)g.lineTo(X(sf(y)+.7),Y(y));g.closePath();
+  const gr=g.createLinearGradient(0,Y(-Rr),0,Y(Rr));[[0,'#f8f8f8'],[.18,'#9fa4a9'],[.36,'#f2f3f4'],[.5,'#c9ccd0'],[.64,'#8c9197'],[.82,'#eceeef'],[1,'#a2a7ac']].forEach(a=>gr.addColorStop(a[0],a[1]));
+  g.fillStyle=gr;g.fill();g.strokeStyle='#222';g.lineWidth=1.8;g.stroke();
+  g.beginPath();for(let y=-Rr+.4;y<=Rr-.4;y+=.4)g.lineTo(X(sf(y)+.12),Y(y));g.strokeStyle='rgba(255,255,255,.95)';g.lineWidth=1.2;g.stroke();
+  for(let y=-Rr;y<=Rr;y+=1){g.beginPath();g.moveTo(X(sf(y)+.7),Y(y));g.lineTo(X(sf(y)+1.6),Y(y-.9));g.strokeStyle='#444';g.lineWidth=1;g.stroke()}
+ }else{const th=Math.max(.7,Math.min(2.1,12/fm)),h=y=>t.sg>0?.25+th*(1-(y/Rr)**2):.25+th*(y/Rr)**2;
+  g.beginPath();for(let y=-Rr;y<=Rr;y+=.3)g.lineTo(X(-h(y)),Y(y));for(let y=Rr;y>=-Rr;y-=.3)g.lineTo(X(h(y)),Y(y));g.closePath();
+  const gr=g.createLinearGradient(X(-th-.3),0,X(th+.3),0);gr.addColorStop(0,'rgba(255,255,255,.85)');gr.addColorStop(.45,'rgba(200,212,220,.35)');gr.addColorStop(.7,'rgba(255,255,255,.25)');gr.addColorStop(1,'rgba(255,255,255,.8)');
+  g.fillStyle=gr;g.fill();g.strokeStyle='rgba(50,60,70,.85)';g.lineWidth=1.6;g.stroke();
+  g.strokeStyle='rgba(255,255,255,.95)';g.lineWidth=2.2;g.lineCap='round';
+  [[.55,.9],[-.9,-.55]].forEach(a=>{g.beginPath();for(let y=a[0]*Rr;y<=a[1]*Rr;y+=.3)g.lineTo(X(-h(y)*.7),Y(y));g.stroke()});g.lineCap='butt'}}
+function dim(x0,x1,y,txt){g.strokeStyle='#333';g.lineWidth=1.2;ln([x0,y],[x1,y],'#333',1.2);[x0,x1].forEach(x=>ln([x,y+.6],[x,y-.6],'#333',1.2));tx(txt,X((x0+x1)/2),Y(y)-6,'center','#111',700,12)}
+function draw(){size();const c=calc(),{t,f,near,di,mag,hi,xi,show}=c;
+ const bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#eef0f2');bg.addColorStop(1,'#d3d6da');g.fillStyle=bg;g.fillRect(0,0,W,H);
+ g.strokeStyle='rgba(0,0,0,.07)';g.lineWidth=1;for(let x=-35;x<=35;x+=5){g.beginPath();g.moveTo(X(x),0);g.lineTo(X(x),H);g.stroke()}for(let y=-20;y<=20;y+=5){g.beginPath();g.moveTo(0,Y(y));g.lineTo(W,Y(y));g.stroke()}
+ ln([-36,0],[36,0],'#333',1.4);for(let x=-35;x<=35;x+=5)ln([x,.4],[x,-.4],'#333',1.2);
+ element(t);
+ if(t.mirror){dot(-t.sg*fm,'F');dot(-t.sg*2*fm,'C')}else{dot(-fm,'F');dot(fm,'F’');dot(-2*fm,'2F');dot(2*fm,'2F’')}
+ tx(t.n,X(0),Y(Rr)-12,'center','#111',700,14);
+ const P=[-d,ho],H3=[0,near?0:-ho*f/(d-f)],Hs=[[0,ho],[0,0],H3],nR=near?2:3;
+ const D=t.mirror?[[-t.sg*f,-t.sg*ho],[-d,-ho],[-1,0]]:[[t.sg*f,-t.sg*ho],[d,-ho],[1,0]],xe=t.mirror?-37:37,col=['#000','#5a5a5a','#8a8a8a'];
+ for(let i=0;i<nR;i++){const h=Hs[i],dv=D[i],tt=(xe-h[0])/dv[0],e=[h[0]+dv[0]*tt,h[1]+dv[1]*tt];
+  if(show&&di<0)ln(h,[xi,hi],col[i],1.8,[6,5]);
+  ln(P,h,col[i],2);chev(P,h,col[i]);ln(h,e,col[i],2);chev(h,e,col[i])}
+ arrow(-d,ho,'obj');tx('Objeto',X(-d),Y(ho)-12,'center','#111',700,13);
+ if(show){arrow(xi,hi,di>0?'real':'virt');tx('Imagen',X(xi),hi>=0?Y(hi)-12:Y(hi)+20,'center','#111',700,13);
+  dim(0,xi,-17,'dᵢ = '+di.toFixed(1)+' cm')}
+ dim(-d,0,-13.5,'d₀ = '+d.toFixed(1)+' cm');
+ if(near||!show){g.fillStyle='rgba(255,255,255,.85)';const m=near?'Objeto en el foco: los rayos salen paralelos, no se forma imagen.':'La imagen se forma muy lejos (fuera de la vista).';g.font='600 13px system-ui';const w=g.measureText(m).width+20;g.fillRect(10,10,w,28);tx(m,20,29,'left','#111',600,13)}
+ return c}
+function refresh(){const c=calc(),{t,f,near,di,mag,hi}=c,fx=x=>x.toFixed(1);
+ $('ddv').textContent=d.toFixed(1)+' cm';$('ffv').textContent=fm.toFixed(1)+' cm';
+ const conv=t.sg>0,pt=t.mirror?'C':'2F';let z;
+ if(conv)z=near?'Objeto en el foco F':Math.abs(d-2*fm)<.05?'Objeto en '+pt:d>2*fm?'Objeto más allá de '+pt:d>fm?'Objeto entre F y '+pt:'Objeto entre F y el elemento';else z='Objeto delante del elemento';
+ const real=!near&&di>0,vir=!near&&di<0,inv=!near&&mag<0,der=!near&&mag>0,big=!near&&Math.abs(mag)>1.02,eq=!near&&Math.abs(Math.abs(mag)-1)<=.02,sm=!near&&Math.abs(mag)<.98;
+ const ch=(a,on)=>'<span class="chip'+(on?' on':'')+'">'+a+'</span>';
+ $('chips').innerHTML=ch('Real',real)+ch('Virtual',vir)+ch('Invertida',inv)+ch('No invertida (derecha)',der)+ch('Mayor tamaño',big)+ch('Igual tamaño',eq)+ch('Menor tamaño',sm);
+ $('zone').textContent=z;
+ $('read').innerHTML=[['f',(f>0?'+':'')+fx(f)+' cm'],['d₀',fx(d)+' cm'],['dᵢ',near?'∞':fx(di)+' cm'],['hᵢ',near?'—':fx(hi)+' cm'],['m = hᵢ/h₀',near?'∞':mag.toFixed(2)]].map(a=>'<div>'+a[0]+'<strong>'+a[1]+'</strong></div>').join('')}
+function info(){const t=T[type];$('info').innerHTML='<h2>'+t.n+'</h2><p class="law">'+t.txt+'</p>'+
+ '<div class="eq">1/f = 1/d₀ + 1/dᵢ</div><div class="eq">m = hᵢ/h₀ = −dᵢ/d₀</div>'+
+ '<p class="note">Convenio: f &gt; 0 en espejo cóncavo y lente convergente; f &lt; 0 en espejo convexo y lente divergente. dᵢ &gt; 0 significa imagen real; dᵢ &lt; 0, imagen virtual. m &lt; 0 es invertida.</p>'+
+ '<h2 style="margin-top:12px;font-size:1.05rem">Características de la imagen</h2><div class="chips" id="chips"></div><p class="note" id="zone" style="margin-top:-4px;font-weight:700;color:#111"></p><div class="read" id="read"></div>'+
+ '<p class="note">Imagen real: flecha gris sólida. Imagen virtual: flecha punteada y translúcida.</p>'}
+function setTab(i){type=i;$('tabs').innerHTML=T.map((x,k)=>'<button class="tab'+(k===i?' on':'')+'" data-k="'+k+'">'+x.n+'<small>'+x.s+'</small></button>').join('');
+ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setTab(+b.dataset.k));info();refresh()}
+function setD(v){d=Math.max(1,Math.min(30,Math.round(v*10)/10));$('dd').value=d;refresh()}
+$('dd').oninput=e=>{d=+e.target.value;refresh()};
+$('ff').oninput=e=>{fm=+e.target.value;refresh()};
+$('pp').onclick=()=>{anim=!anim;$('pp').textContent=anim?'⏸ Detener animación':'▶ Animar objeto'};
+cv.addEventListener('pointerdown',e=>{dragging=true;anim=false;$('pp').textContent='▶ Animar objeto';cv.setPointerCapture(e.pointerId);mv(e)});
+cv.addEventListener('pointermove',e=>{if(dragging)mv(e)});
+['pointerup','pointercancel'].forEach(k=>cv.addEventListener(k,()=>dragging=false));
+function mv(e){const r=cv.getBoundingClientRect();setD(-((e.clientX-r.left-cx)/s))}
+let last=performance.now();
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
+ if(anim){ta+=dt*.5;setD(15.5+14.3*Math.sin(ta))}
+ draw();requestAnimationFrame(frame)}
+setTab(0);requestAnimationFrame(frame);
+</script>
+</body>
+</html>
